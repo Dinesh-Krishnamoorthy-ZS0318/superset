@@ -20,6 +20,8 @@ import logging
 from typing import Any, cast, TypedDict
 
 import pandas as pd
+from bs4 import BeautifulSoup
+import re
 from flask_babel import gettext as __
 
 from superset import app, db, results_backend, results_backend_use_msgpack
@@ -32,6 +34,7 @@ from superset.sqllab.limiting_factor import LimitingFactor
 from superset.utils import core as utils, csv
 from superset.views.utils import _deserialize_results_payload
 
+
 config = app.config
 
 logger = logging.getLogger(__name__)
@@ -42,6 +45,18 @@ class SqlExportResult(TypedDict):
     count: int
     data: list[Any]
 
+
+def strip_html_css(text):
+    """
+    Simply extract text content from HTML formatted string.
+    Preserves only the actual value, removing all HTML/CSS.
+    """
+    if not isinstance(text, str):
+        return text
+
+    # Create BeautifulSoup object and just get the text content
+    soup = BeautifulSoup(str(text), "html.parser")
+    return soup.get_text()
 
 class SqlResultExportCommand(BaseCommand):
     _client_id: str
@@ -106,7 +121,7 @@ class SqlResultExportCommand(BaseCommand):
                 dtype=object,
                 columns=[c["name"] for c in obj["columns"]],
             )
-
+            df = df.applymap(strip_html_css)
             logger.info("Using pandas to convert to CSV")
         else:
             logger.info("Running a query to turn into CSV")
@@ -131,6 +146,7 @@ class SqlResultExportCommand(BaseCommand):
                 self._query.catalog,
                 self._query.schema,
             )[:limit]
+            df = df.applymap(strip_html_css)
 
         csv_data = csv.df_to_escaped_csv(df, index=False, **config["CSV_EXPORT"])
 
@@ -139,3 +155,13 @@ class SqlResultExportCommand(BaseCommand):
             "count": len(df.index),
             "data": csv_data,
         }
+
+def clean_html_from_dataframe(df):
+    """Remove HTML/CSS content from all string columns in a DataFrame."""
+
+    def clean_html(text):
+        if isinstance(text, str):
+            return BeautifulSoup(text, "html.parser").get_text()
+        return text
+
+    return df.applymap(clean_html)
