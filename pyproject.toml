@@ -69,6 +69,7 @@ dependencies = [
     "nh3>=0.2.11, <0.3",
     "numpy==1.23.5",
     "packaging",
+    "beautifulsoup4",
     # --------------------------
     # pandas and related (wanting pandas[performance] without numba as it's 100+MB and not needed)
     "pandas[excel]>=2.0.3, <2.1",
