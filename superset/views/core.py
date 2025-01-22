@@ -222,7 +222,7 @@ class Superset(BaseSupersetView):
             response_type = cached.get("response_type")
             # Set form_data in Flask Global as it is used as a fallback
             # for async queries with jinja context
-            g.form_data = form_data
+            setattr(g, "form_data", form_data)
             datasource_id, datasource_type = get_datasource_info(None, None, form_data)
 
             viz_obj = get_viz(
@@ -341,6 +341,37 @@ class Superset(BaseSupersetView):
             return self.generate_json(viz_obj, response_type)
         except SupersetException as ex:
             return json_error_response(utils.error_msg_from_exception(ex), 400)
+            
+            
+    @api
+    @has_access_api
+    @event_logger.log_this
+    @expose("/csv/<client_id>")
+    def csv(self, client_id):
+        """Downloads the data in CSV format"""
+        logging.info("Exporting CSV file [%s]", client_id)
+        
+        # Get the query results
+        results = self.get_results(client_id)
+        
+        # Convert to DataFrame
+        df = results.to_df()
+        
+        # Use our modified df_to_csv function
+        csv_data = df_to_csv(
+            df,
+            index=False,
+            encoding='utf-8',
+        )
+        
+        # Prepare response
+        response = Response(
+            csv_data,
+            mimetype="text/csv",
+            headers=generate_download_headers("csv"),
+        )
+        
+        return response       
 
     @staticmethod
     def get_redirect_url() -> str:
@@ -394,7 +425,7 @@ class Superset(BaseSupersetView):
     )
     @deprecated()
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-    def explore(  # noqa: C901
+    def explore(
         self,
         datasource_type: str | None = None,
         datasource_id: int | None = None,
@@ -441,7 +472,7 @@ class Superset(BaseSupersetView):
                 if form_data_key:
                     flash(
                         _(
-                            "Form data not found in cache, reverting to dataset metadata."  # noqa: E501
+                            "Form data not found in cache, reverting to dataset metadata."
                         )
                     )
 
@@ -473,10 +504,10 @@ class Superset(BaseSupersetView):
         if not viz_type and datasource and datasource.default_endpoint:
             return redirect(datasource.default_endpoint)
 
-        selectedColumns = []  # noqa: N806
+        selectedColumns = []
 
         if "selectedColumns" in form_data:
-            selectedColumns = form_data.pop("selectedColumns")  # noqa: N806
+            selectedColumns = form_data.pop("selectedColumns")
 
         if "viz_type" not in form_data:
             form_data["viz_type"] = app.config["DEFAULT_VIZ_TYPE"]
@@ -582,7 +613,7 @@ class Superset(BaseSupersetView):
         )
 
     @staticmethod
-    def save_or_overwrite_slice(  # noqa: C901
+    def save_or_overwrite_slice(
         # pylint: disable=too-many-arguments,too-many-locals
         slc: Slice | None,
         slice_add_perm: bool,
@@ -792,16 +823,9 @@ class Superset(BaseSupersetView):
         try:
             dashboard.raise_for_access()
         except SupersetSecurityException as ex:
-            # anonymous users should get the login screen, others should go to dashboard list  # noqa: E501
-            if g.user is None or g.user.is_anonymous:
-                redirect_url = f"{appbuilder.get_url_for_login}?next={request.url}"
-                warn_msg = "Users must be logged in to view this dashboard."
-            else:
-                redirect_url = "/dashboard/list/"
-                warn_msg = utils.error_msg_from_exception(ex)
             return redirect_with_flash(
-                url=redirect_url,
-                message=warn_msg,
+                url="/dashboard/list/",
+                message=utils.error_msg_from_exception(ex),
                 category="danger",
             )
         add_extra_log_payload(
@@ -863,6 +887,10 @@ class Superset(BaseSupersetView):
     @expose("/log/", methods=("POST",))
     def log(self) -> FlaskResponse:
         return Response(status=200)
+
+    @expose("/theme/")
+    def theme(self) -> FlaskResponse:
+        return self.render_template("superset/theme.html")
 
     @api
     @handle_api_exception

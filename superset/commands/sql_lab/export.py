@@ -156,12 +156,12 @@ class SqlResultExportCommand(BaseCommand):
             "data": csv_data,
         }
 
-def clean_html_from_dataframe(df):
-    """Remove HTML/CSS content from all string columns in a DataFrame."""
+# def clean_html_from_dataframe(df):
+#     """Remove HTML/CSS content from all string columns in a DataFrame."""
 
-    def clean_html(text):
-        if isinstance(text, str):
-            return BeautifulSoup(text, "html.parser").get_text()
-        return text
+#     def clean_html(text):
+#         if isinstance(text, str):
+#             return BeautifulSoup(text, "html.parser").get_text()
+#         return text
 
-    return df.applymap(clean_html)
+#     return df.applymap(clean_html)
